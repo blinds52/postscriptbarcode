@@ -385,8 +385,9 @@ begin
     /barcode exch def
 
     /dontdraw false def
-    /rows -1 def     % TODO
-    /columns 8 def   % TODO
+    /rows -1 def
+    /columns -1 def
+    /ratio -1 def
     /parse false def
     /parsefnc false def
     /fast false def
@@ -404,10 +405,12 @@ begin
 
     /rows rows cvi def
     /columns columns cvi def
+    /ratio ratio cvr def
 
-    % TODO
-    columns 4 ge columns 62 le and
-    rows 2 ge rows 44 le and rows -1 eq or and {/c columns def} if
+    % Set the ratio to 3:2 if no size is specified
+    ratio -1 eq rows -1 eq and columns -1 eq and {
+        /ratio 3 2 div def
+    } if
 
     % Parse ordinals of the form ^NNN to ASCII
     parse {
@@ -770,6 +773,62 @@ begin
 %    } loop
 %    /cws cws 0 j getinterval def
 
+    /cws [100 07 06 20 104 33 34 35 12 34 56] def                          % TODO dummy with mask 00
+    /cws [02 107 112 19 90 96 00 25 109 64 64 64 64 16 111 44 17 95] def   % TODO dummy with mask 03
+    /cws [1] def
+
+    /ratio -1 def /rows 20 def /columns 11 def  % TODO dummy
+
+    % Determine the symbol size
+    /nd cws length def
+    /minarea nd 3 add nd 2 idiv add 9 mul 2 add 2 mul def
+    ratio -1 ne {        % Fixed ratio
+        /hgt minarea ratio div sqrt def
+        /wid minarea ratio mul sqrt def
+        /h hgt cvi def  /w wid cvi def
+        h w add 2 mod 1 eq {
+            h w mul minarea lt {/h h 1 add def  /w w 1 add def} if
+        } {
+            hgt w mul wid h mul lt {
+                /w w 1 add def
+                h w mul minarea lt {
+                    /w w 1 sub def  /h h 1 add def
+                    h w mul minarea lt {/w w 2 add def} if
+                } if
+            } {
+                /h h 1 add def
+                h w mul minarea lt {
+                    /h h 1 sub def  /w w 1 add def
+                    h w mul minarea lt {/h h 2 add def} if
+                } if
+            } ifelse
+        } ifelse
+        /rows h def  /columns w def
+    } {
+        columns -1 eq {  % Fixed height
+            /columns minarea rows add 1 sub rows idiv dup rows add 2 mod 0 eq {1 add} if def
+        } if
+        rows -1 eq {     % Fixed width
+            /rows minarea columns add 1 sub columns idiv dup columns add 2 mod 0 eq {1 add} if def
+        } if
+    } ifelse
+
+    /mode (bin) def  % Dummy
+
+    % Extend the codewords with padding
+    /ndots rows columns mul 2 idiv def
+    {
+       nd 1 add dup 2 idiv 3 add add 9 mul 2 add ndots gt {exit} if
+       /nd nd 1 add def
+    } loop
+    /cws [
+        cws aload pop
+        nd cws length gt {
+            mode (bin) eq {109} {106} ifelse  % TODO verify mode name
+            nd cws length sub 1 sub {106} repeat
+        } if
+    ] def
+
     % Create an array containing the character mappings
     /encs [
         (101010101) (010101011) (010101101) (010110101) (011010101)
@@ -797,13 +856,8 @@ begin
         (110111000) (111000110) (111001100)
     ] def
 
-    % TODO Determine size and orientation and add padding
-
-    /cws [100 07 06 20 104 33 34 35 12 34 56] def                          % TODO dummy with mask 00
-    /cws [02 107 112 19 90 96 00 25 109 64 64 64 64 16 111 44 17 95] def   % TODO dummy with mask 03
-
     /rsalog [ 1 112 { dup 3 mul 113 mod } repeat ] def
-    /nd cws length 1 add def       % Include mask
+    /nd cws length 1 add def       % TODO don't include mask
     /nc nd 1 sub 2 idiv 3 add def
     /nw nd nc add def
     /step nw 111 add 112 idiv def
