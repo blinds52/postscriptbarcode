@@ -774,10 +774,10 @@ begin
 %    /cws cws 0 j getinterval def
 
     /cws [100 07 06 20 104 33 34 35 12 34 56] def                          % TODO dummy with mask 00
-    /cws [02 107 112 19 90 96 00 25 109 64 64 64 64 16 111 44 17 95] def   % TODO dummy with mask 03
-    /cws [1] def
+    /ratio 3 2 div def /rows -1 def /columns -1 def  % TODO dummy
 
-    /ratio -1 def /rows 20 def /columns 11 def  % TODO dummy
+%    /cws [02 107 112 19 90 96 00 25 109 64 64 64 64 16 111 44 17 95] def   % TODO dummy with mask 03
+%    /ratio 3 2 div def /rows 13 def /columns -1 def  % TODO dummy
 
     % Determine the symbol size
     /nd cws length def
@@ -821,6 +821,9 @@ begin
        nd 1 add dup 2 idiv 3 add add 9 mul 2 add ndots gt {exit} if
        /nd nd 1 add def
     } loop
+    /nc nd 2 idiv 3 add def
+    /nw nd nc add def
+    /rembits ndots nw 9 mul 2 add sub def
     /cws [
         cws aload pop
         nd cws length gt {
@@ -856,12 +859,10 @@ begin
         (110111000) (111000110) (111001100)
     ] def
 
-    /rsalog [ 1 112 { dup 3 mul 113 mod } repeat ] def
-    /nd cws length 1 add def       % TODO don't include mask
-    /nc nd 1 sub 2 idiv 3 add def
-    /nw nd nc add def
-    /step nw 111 add 112 idiv def
     /offset {step mul start add} bind def
+
+    /rsalog [ 1 112 { dup 3 mul 113 mod } repeat ] def
+    /step nw 112 idiv 1 add def
 
     /bestscore -1 def
     [ 2#00 2#01 2#10 2#11 ] {  % For each mask pattern
@@ -876,8 +877,8 @@ begin
         ] def
         0 1 step 1 sub {
             /start exch def
-            /ND nd start sub step add 1 sub step idiv def
-            /NW nw start sub step add 1 sub step idiv def
+            /ND nd 1 add start sub step add 1 sub step idiv def
+            /NW nw 1 add start sub step add 1 sub step idiv def
             /NC NW ND sub def
             /coeffs [ 1 NC {0} repeat ] def
             1 1 NC {
@@ -898,7 +899,19 @@ begin
             ND 1 NW 1 sub { dup rscws exch offset 113 rscws 5 -1 roll offset get sub 113 mod put } for
         } for
 
-        % TODO Walk the symbol placing the bitstream. mask is 2 bits. Each codeword lookup into encs.
+        % Create the bitstream
+        /bits ndots string def
+        bits 0 [ (00) (01) (10) (11) ] mask get putinterval
+        1 1 nw {
+            /i exch def
+            bits i 1 sub 9 mul 2 add encs rscws i get get putinterval
+        } for
+        rembits 0 gt {
+            bits nw 9 mul 2 add (11111111111111111) 0 rembits getinterval putinterval
+        } if
+
+        % TODO Walk the symbol placing the bitstream
+
         % TODO evaluate and set bestsym. Implement fast mode.
 
     } forall
