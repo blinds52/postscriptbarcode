@@ -773,11 +773,13 @@ begin
 %    } loop
 %    /cws cws 0 j getinterval def
 
-    /cws [100 07 06 20 104 33 34 35 12 34 56] def                          % TODO dummy with mask 00
-    /ratio 3 2 div def /rows -1 def /columns -1 def  % TODO dummy
+%    /cws [100 07 06 20 104 33 34 35 12 34 56] def                          % TODO dummy with mask 00
+%    /ratio 3 2 div def /rows -1 def /columns -1 def  % TODO dummy
+%    /mode (notbin) def  % Dummy
 
-%    /cws [02 107 112 19 90 96 00 25 109 64 64 64 64 16 111 44 17 95] def   % TODO dummy with mask 03
-%    /ratio 3 2 div def /rows 13 def /columns -1 def  % TODO dummy
+    /cws [02 107 112 19 90 96 00 25 109 64 64 64 64 16 111 44 17 95] def   % TODO dummy with mask 03
+    /ratio -1 def /rows 13 def /columns -1 def  % TODO dummy
+    /mode (notbin) def  % Dummy
 
     % Determine the symbol size
     /nd cws length def
@@ -813,8 +815,6 @@ begin
         } if
     } ifelse
 
-    /mode (bin) def  % Dummy
-
     % Extend the codewords with padding
     /ndots rows columns mul 2 idiv def
     {
@@ -824,13 +824,13 @@ begin
     /nc nd 2 idiv 3 add def
     /nw nd nc add def
     /rembits ndots nw 9 mul 2 add sub def
-    /cws [
-        cws aload pop
-        nd cws length gt {
+    nd cws length gt {
+        /cws [
+            cws aload pop
             mode (bin) eq {109} {106} ifelse  % TODO verify mode name
             nd cws length sub 1 sub {106} repeat
-        } if
-    ] def
+        ] def
+    } if
 
     % Create an array containing the character mappings
     /encs [
@@ -859,10 +859,57 @@ begin
         (110111000) (111000110) (111001100)
     ] def
 
-    /offset {step mul start add} bind def
+    % Final six dots arranged at edges
+    rows 2 mod 0 eq {
+        /sixedges [
+            [ columns 1 sub  rows 2 sub ]
+            [ 0              rows 2 sub ]
+            [ columns 2 sub  rows 1 sub ]
+            [ 1              rows 1 sub ]
+            [ columns 1 sub  0          ]
+            [ 0              0          ]
+        ] def
+    } {
+        /sixedges [
+            [ columns 2 sub  0          ]
+            [ columns 2 sub  rows 1 sub ]
+            [ columns 1 sub  1          ]
+            [ columns 1 sub  rows 2 sub ]
+            [ 0              0          ]
+            [ 0              rows 1 sub ]
+        ] def
+    } ifelse
 
+/oprint {  % TODO
+    0 1 rows 1 sub {
+        pixs exch columns mul columns getinterval ==
+    } for
+} bind def
+
+    /dmv {columns mul add} bind def
+
+    % Construct the template
+    /outline rows columns mul array def
+    0 1 rows 1 sub {
+        /y exch def
+        0 1 columns 1 sub {
+            /x exch def
+            outline x y dmv x y add 2 mod 1 sub put
+        } for
+    } for
+    sixedges {
+        outline exch aload pop dmv 1 put
+    } forall
+
+    % TODO Evaluate the symbol
+    /evalsymbol {
+        pop mask 3 eq {60} {20} ifelse
+    } bind def
+
+    % Reed Solomon antilog table
     /rsalog [ 1 112 { dup 3 mul 113 mod } repeat ] def
     /step nw 112 idiv 1 add def
+    /offset {step mul start add} bind def
 
     /bestscore -1 def
     [ 2#00 2#01 2#10 2#11 ] {  % For each mask pattern
@@ -910,9 +957,42 @@ begin
             bits nw 9 mul 2 add (11111111111111111) 0 rembits getinterval putinterval
         } if
 
-        % TODO Walk the symbol placing the bitstream
+        % Walk the symbol placing the bitstream
+        /pixs outline dup length array copy def
+        /posx 0 def
+        /posy rows 2 mod 0 eq {0} {rows 1 sub} ifelse def
+        bits 0 bits length 6 sub getinterval {
+            {  % Move to next vacant position
+                pixs posx posy dmv get -1 eq {exit} if
+                rows 2 mod 0 eq {
+                    /posy posy 1 add def
+                    posy rows eq {
+                        /posy 0 def
+                        /posx posx 1 add def
+                    } if
+                } {
+                    /posx posx 1 add def
+                    posx columns eq {
+                        /posx 0 def
+                        /posy posy 1 sub def
+                    } if
+                } ifelse
+            } loop
+            pixs posx posy dmv 3 -1 roll 48 sub put
+        } forall
+        0 1 5 {  % Last six edge dots
+            /i exch def
+            pixs sixedges i get aload pop dmv
+            bits bits length 6 sub i add get 48 sub put
+        } for
 
-        % TODO evaluate and set bestsym. Implement fast mode.
+        % Evaluate the symbol to find the most suitable mask
+        % TODO Implement fast mode.
+        /score pixs evalsymbol def
+        score bestscore gt {
+            /bestsym pixs def
+            /bestscore score def
+        } if
 
     } forall
     /pixs bestsym def
@@ -921,10 +1001,10 @@ begin
     <<
     /ren //renmatrix
     /pixs pixs
-    /pixx symwid
-    /pixy pixs length symwid idiv
-    /height pixs length symwid idiv 72 div
-    /width symwid 72 div
+    /pixx columns
+    /pixy rows
+    /height rows 72 div
+    /width columns 72 div
     /opt options
     >>
 
@@ -937,5 +1017,6 @@ begin
 end
 /setpacking where {pop setpacking} if
 
+5 dup scale
 50 50 moveto (Hello) () /dotcode /uk.co.terryburton.bwipp findresource exec
 
