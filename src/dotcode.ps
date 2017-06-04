@@ -818,8 +818,8 @@ begin
     % Extend the codewords with padding
     /ndots rows columns mul 2 idiv def
     {
-       nd 1 add dup 2 idiv 3 add add 9 mul 2 add ndots gt {exit} if
-       /nd nd 1 add def
+        nd 1 add dup 2 idiv 3 add add 9 mul 2 add ndots gt {exit} if
+        /nd nd 1 add def
     } loop
     /nc nd 2 idiv 3 add def
     /nw nd nc add def
@@ -901,10 +901,125 @@ begin
         outline exch aload pop dmv 1 put
     } forall
 
-    % TODO Evaluate the symbol
+    % Evaluate the symbol
     /evalsymbol {
-        pop mask 3 eq {60} {20} ifelse
+        /sym exch def
+
+        /pen 0 def  /p 0 def
+        rows 2 mod 0 eq {
+            rows 12 lt {
+                /sum 0 def
+                1 1 columns 2 sub {
+                    /x exch def
+                    false
+                    x 1 and 1 rows 1 sub {
+                        sym exch x exch dmv get 1 eq {pop true exit} if
+                    } for
+                    {  % Column not empty
+                        /sum 0 def
+                        /pen pen p add def
+                        /p 0 def
+                    } {
+                        /sum sum 1 def
+                        /p sum 1 eq {rows} {p rows mul} ifelse def
+                    } ifelse
+                } for
+            } if
+        } {
+            columns 12 lt {
+                /sum 0 def
+                1 1 rows 2 sub {
+                    /y exch def
+                    false
+                    y 1 and 1 columns 1 sub {
+                        sym exch y dmv get 1 eq {pop true exit} if
+                    } for
+                    { % Row not empty
+                        /sum 0 def
+                        /pen pen p add def
+                        /p 0 def
+                    } {
+                        /sum sum 1 add def
+                        /p sum 1 eq {columns} {p columns mul} ifelse def
+                    } ifelse
+                } for
+            } if
+        } ifelse
+        /pen pen p add def
+
+        /worst 9999999 def
+        [ [ /x 0 ] [ /x 1 ] [ /y 0 ] [ /y 1 ] ] {  % Top Bottom Left Right
+            aload pop  /fl exch def  /dir exch def
+            /sum 0 def  /first -1 def  /last -1 def
+            0 1 dir /x eq {columns} {rows} ifelse 1 sub {
+                dir exch def
+                sym
+                dir load
+                dir /x eq {rows} {columns} ifelse 1 sub fl mul
+                dir /y eq {exch} if
+                dmv get 1 eq {
+                    first -1 eq {/first dir load def} if
+                    /last dir load def
+                    /sum sum 1 add def
+                } if
+            } for
+            sum last add first sub
+            dir /x eq {rows} {columns} ifelse mul
+            dup worst lt {/worst exch def} {pop} ifelse
+        } forall
+
+        % Pad twice on all sides
+        /symp [
+            columns 4 add 2 mul {0} repeat
+            0 columns sym length 1 sub {
+                0 exch 0 exch
+                sym exch columns getinterval aload pop
+                0 0
+            } for
+            columns 4 add 2 mul {0} repeat
+        ] def
+
+        % Count voids and isolated dots
+        /columns columns 4 add def
+        /rows    rows    4 add def
+        /sum 0 def
+        2 1 rows 3 sub {
+            /y exch def
+            y 1 and 2 add 2 columns 3 sub {
+                /x exch def
+                1 {  % Common exit
+                    symp x 1 sub y 1 sub dmv get 1 eq {exit} if
+                    symp x 1 add y 1 sub dmv get 1 eq {exit} if
+                    symp x 1 sub y 1 add dmv get 1 eq {exit} if
+                    symp x 1 add y 1 add dmv get 1 eq {exit} if
+                    symp x y dmv get 0 eq {/sum sum 1 add def exit} if
+                    symp x 2 sub y       dmv get 1 eq {exit} if
+                    symp x       y 2 sub dmv get 1 eq {exit} if
+                    symp x 2 add y       dmv get 1 eq {exit} if
+                    symp x       y 2 add dmv get 1 eq {exit} if
+                    /sum sum 1 add def
+                } repeat
+            } for
+        } for
+        /columns columns 4 sub def
+        /rows    rows    4 sub def
+
+        worst sum sum mul sub pen sub
+
     } bind def
+
+/rows 5 def /columns 6 def
+
+ [
+1 0 0 0 1 0
+0 0 0 0 0 1
+0 0 1 0 0 0
+0 0 0 0 0 1
+1 0 0 0 1 0
+ ] evalsymbol
+
+asdf
+
 
     % Reed Solomon antilog table
     /rsalog [ 1 112 { dup 3 mul 113 mod } repeat ] def
@@ -918,9 +1033,9 @@ begin
 
         % Calculate the error correction codewords for each block
         /rscws [
-           mask
-           [ 0 3 7 17 ] mask get 0 cws {1 index add 113 mod exch 2 index add exch 3 1 roll} forall pop pop
-           nc {0} repeat
+             mask
+             [ 0 3 7 17 ] mask get 0 cws {1 index add 113 mod exch 2 index add exch 3 1 roll} forall pop pop
+             nc {0} repeat
         ] def
         0 1 step 1 sub {
             /start exch def
