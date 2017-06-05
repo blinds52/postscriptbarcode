@@ -390,6 +390,7 @@ begin
     /ratio -1 def
     /parse false def
     /parsefnc false def
+    /raw false def
     /fast false def
 
     % Parse the input options
@@ -433,353 +434,47 @@ begin
         } loop
     } if
 
-    /barlen barcode length def
+    % Convert input into array of codewords
+    raw {
+        /cws barcode length array def
+        /i 0 def /j 0 def
+        { % loop
+            i barcode length eq {exit} if
+            /cw barcode i 1 add 3 getinterval cvi def
+            cws j cw put
+            /i i 4 add def
+            /j j 1 add def
+        } loop
+        /cws cws 0 j getinterval def
+        /mode (notbin) def  % Dummy
+    } {  % Simple autoencoder from input to codewords using byte mode
+        /barlen barcode length def
 
-    % Convert input into bytes accounting for FNC characters
-    /laa  -1 def  /lab  -2 def  /lac  -3 def  /bin  -4 def
-    /sfa  -5 def  /sfb  -6 def  /sb2  -7 def  /sb3  -8 def
-    /sb4  -9 def  /sb5 -10 def  /sb6 -11 def  /sfc -12 def
-    /sc2 -13 def  /sc3 -14 def  /sc4 -15 def  /bsa -16 def
-    /bsb -17 def  /fn1 -18 def  /fn2 -19 def  /fn3 -20 def
-    /crl -21 def  /aim -22 def
+        % Base 259 to one more in base 103
+        /base259to103 {
+            dup length exch
+            0 exch {add 259 mul} forall 259 idiv
+            exch [ 3 1 roll 1 add {dup 103 mod exch 103 idiv} repeat pop ]
+            [ exch dup length 1 sub -1 0 {1 index exch get exch} for pop ]
+        } bind def
 
-    % Character maps for each state
-    /charmaps [
-      %  A    B    C         A    B    C         A    B    C
-      [  32   32  (00) ]  [ (!)  (!)  (01) ]  [ (")  (")  (02) ]  % 0-2
-      [ (#)  (#)  (03) ]  [ ($)  ($)  (04) ]  [ (%)  (%)  (05) ]  % 3-5
-      [ (&)  (&)  (06) ]  [ (')  (')  (07) ]  [  40   40  (08) ]  % 6-8
-      [  41   41  (09) ]  [ (*)  (*)  (10) ]  [ (+)  (+)  (11) ]  % 9-11
-      [ (,)  (,)  (12) ]  [ (-)  (-)  (13) ]  [ (.)  (.)  (14) ]  % 12-14
-      [ (/)  (/)  (15) ]  [ (0)  (0)  (16) ]  [ (1)  (1)  (17) ]  % 15-17
-      [ (2)  (2)  (18) ]  [ (3)  (3)  (19) ]  [ (4)  (4)  (20) ]  % 18-20
-      [ (5)  (5)  (21) ]  [ (6)  (6)  (22) ]  [ (7)  (7)  (23) ]  % 21-23
-      [ (8)  (8)  (24) ]  [ (9)  (9)  (25) ]  [ (:)  (:)  (26) ]  % 24-26
-      [ (;)  (;)  (27) ]  [ (<)  (<)  (28) ]  [ (=)  (=)  (29) ]  % 27-29
-      [ (>)  (>)  (30) ]  [ (?)  (?)  (31) ]  [ (@)  (@)  (32) ]  % 30-32
-      [ (A)  (A)  (33) ]  [ (B)  (B)  (34) ]  [ (C)  (C)  (35) ]  % 33-35
-      [ (D)  (D)  (36) ]  [ (E)  (E)  (37) ]  [ (F)  (F)  (38) ]  % 36-38
-      [ (G)  (G)  (39) ]  [ (H)  (H)  (40) ]  [ (I)  (I)  (41) ]  % 39-41
-      [ (J)  (J)  (42) ]  [ (K)  (K)  (43) ]  [ (L)  (L)  (44) ]  % 42-44
-      [ (M)  (M)  (45) ]  [ (N)  (N)  (46) ]  [ (O)  (O)  (47) ]  % 45-47
-      [ (P)  (P)  (48) ]  [ (Q)  (Q)  (49) ]  [ (R)  (R)  (50) ]  % 48-50
-      [ (S)  (S)  (51) ]  [ (T)  (T)  (52) ]  [ (U)  (U)  (53) ]  % 51-53
-      [ (V)  (V)  (54) ]  [ (W)  (W)  (55) ]  [ (X)  (X)  (56) ]  % 54-56
-      [ (Y)  (Y)  (57) ]  [ (Z)  (Z)  (58) ]  [ ([)  ([)  (59) ]  % 57-59
-      [  92   92  (60) ]  [ (])  (])  (61) ]  [ (^)  (^)  (62) ]  % 60-62
-      [ (_)  (_)  (63) ]  [   0  (`)  (64) ]  [   1  (a)  (65) ]  % 63-65
-      [   2  (b)  (66) ]  [   3  (c)  (67) ]  [   4  (d)  (68) ]  % 66-68
-      [   5  (e)  (69) ]  [   6  (f)  (70) ]  [   7  (g)  (71) ]  % 69-71
-      [   8  (h)  (72) ]  [   9  (i)  (73) ]  [  10  (j)  (74) ]  % 72-74
-      [  11  (k)  (75) ]  [  12  (l)  (76) ]  [  13  (m)  (77) ]  % 75-77
-      [  14  (n)  (78) ]  [  15  (o)  (79) ]  [  16  (p)  (80) ]  % 78-80
-      [  17  (q)  (81) ]  [  18  (r)  (82) ]  [  19  (s)  (83) ]  % 81-83
-      [  20  (t)  (84) ]  [  21  (u)  (85) ]  [  22  (v)  (86) ]  % 84-86
-      [  23  (w)  (87) ]  [  24  (x)  (88) ]  [  25  (y)  (89) ]  % 87-89
-      [  26  (z)  (90) ]  [  27  ({)  (91) ]  [  28  (|)  (92) ]  % 90-92
-      [  29  (})  (93) ]  [  30  (~)  (94) ]  [  31  127  (95) ]  % 93-95
-      [ sfb  crl  (96) ]  [ sb2    9  (97) ]  [ sb3   28  (98) ]  % 96-98
-      [ sb4   29  (99) ]  [ sb5   30  aim  ]  [ sb6  sfa  laa  ]  % 99-101
-      [ lab  laa  sfb  ]  [ sc2  sc2  sb2  ]  [ sc3  sc3  sb3  ]  % 102-104
-      [ sc4  sc4  sb4  ]  [ lac  lac  lab  ]  [ fn1  fn1  fn1  ]  % 105-107
-      [ fn2  fn2  fn2  ]  [ fn3  fn3  fn3  ]  [ bsa  bsa  bsa  ]  % 108-110
-      [ bsb  bsb  bsb  ]  [ bin  bin  bin  ]                      % 111-112
-    ] def
-
-    % Invert charmaps to give character to value maps for each state
-    /charvals [ 113 dict 113 dict 113 dict ] def
-    0 1 charmaps length 1 sub {
-        /i exch def
-        /encs charmaps i get def
-        0 1 2 {
-            /j exch def
-            encs j get dup type /stringtype eq {0 get} if  % convert string to ASCII if required
-            charvals j get exch i put
+        barlen 5 idiv 6 mul
+        barlen 5 mod dup 0 eq {pop} {add 1 add} ifelse 1 add
+        /cws exch array def
+        cws 0 112 put
+        0 1 barlen 5 idiv 1 sub {
+            /i exch def
+            barcode i 5 mul 5 getinterval base259to103
+            cws exch i 6 mul 1 add exch putinterval
         } for
-    } for
-    /seta charvals 0 get def
-    /setb charvals 1 get def
-    /setc charvals 2 get def
-
-    /fncvals <<
-        (FNC1) fn1
-        (FNC2) fn2
-        (FNC3) fn3
-    >> def
-    /msg barlen array def
-    /i 0 def /j 0 def {
-        i barlen eq {exit} if
-        /char barcode i get def
-        parsefnc char 94 eq and i barlen 4 sub lt and {
-            barcode i 1 add get 94 ne {
-                /char fncvals barcode i 1 add 4 getinterval get def
-                /i i 4 add def
-            } {
-                /i i 1 add def
-            } ifelse
+        /rem barlen 5 mod def
+        rem 0 ne {
+            barcode barlen rem sub rem getinterval base259to103
+            cws exch cws length rem sub 1 sub exch putinterval
         } if
-        msg j char put
-        /i i 1 add def
-        /j j 1 add def
-    } loop
-    /msg msg 0 j getinterval def
-    /msglen msg length def
 
-%    % Determine digit runlength and characters from given position
-%    /numsscr {
-%        /n 0 def /s 0 def
-%        /p exch def {
-%            p msglen ge {exit} if
-%            msg p get
-%            dup setc exch known not {pop exit} if
-%            fn1 eq {
-%                % FNC1 in odd position of run like two digits
-%                s 2 mod 0 eq {/s s 1 add def} {exit} ifelse
-%            } if
-%            /n n 1 add def
-%            /s s 1 add def
-%            /p p 1 add def
-%        } loop
-%        n s
-%    } bind def
-%
-%    % Encoding for each alphabet
-%    /enca {
-%        seta exch get cws exch j exch put
-%        /j j 1 add def
-%    } bind def
-%    /encb {
-%        setb exch get cws exch j exch put
-%        /j j 1 add def
-%    } bind def
-%    /encc {
-%        dup type /arraytype ne {
-%            setc exch get
-%        } {
-%            aload pop 48 sub exch 48 sub 10 mul add
-%        } ifelse
-%        cws exch j exch put
-%        /j j 1 add def
-%    } bind def
-%
-%    % Character exclusively in either alphabet A or B
-%    /anotb {dup seta exch known exch setb exch known not and} bind def
-%    /bnota {dup setb exch known exch seta exch known not and} bind def
-%
-%    % Pre-compute relative position of next anotb and next bnota characters
-%    /nextanotb [ msg length {0} repeat 9999 ] def
-%    /nextbnota [ msg length {0} repeat 9999 ] def
-%    msg length 1 sub -1 0 {
-%        /i exch def
-%        msg i get anotb {
-%            nextanotb i 0 put
-%        } {
-%            nextanotb i nextanotb i 1 add get 1 add put
-%        } ifelse
-%        msg i get bnota {
-%            nextbnota i 0 put
-%        } {
-%            nextbnota i nextbnota i 1 add get 1 add put
-%        } ifelse
-%    } for
-%
-%    % Does a-only come before b-only after given position and vice versa
-%    /abeforeb {dup nextanotb exch get exch nextbnota exch get lt} bind def
-%    /bbeforea {dup nextbnota exch get exch nextanotb exch get lt} bind def
-%
-%    % Add padding to row
-%    /padrow {
-%        {
-%           {  % common exit
-%               cset (seta) eq {swc enca /cset (setc) def exit} if
-%               cset (setb) eq {swc encb /cset (setc) def exit} if
-%               cset (setc) eq {swb encc /cset (setb) def exit} if
-%           } loop
-%        } repeat
-%    } bind def
-%
-%    % Convert message to codewords
-%    /cws c 5 add rows -1 ne {rows} {44} ifelse mul array def
-%
-%    /i 0 def /j 0 def /r 1 def
-%    /lastrow false def {
-%        
-%        lastrow {exit} if
-%
-%        % Add start character and code subset selector
-%        sta enca
-%        i msglen lt {i numsscr} {-1 -1} ifelse /nums exch def /nchars exch def
-%        {  % common exit
-%            msglen 0 eq {
-%                swb enca
-%                /cset (setb) def
-%                exit
-%            } if
-%            nums 2 ge {
-%                swc enca
-%                /cset (setc) def
-%                exit
-%            } if
-%            i abeforeb { 
-%                sft enca
-%                /cset (seta) def
-%                exit 
-%            } if 
-%            swb enca
-%            /cset (setb) def
-%            exit
-%        } loop
-%        /j j 1 add def  % Skip row indicator position
-%
-%        % Main encoding loop
-%        /endofrow false def {
-%            /rem c 3 add j c 5 add mod sub def  % Codewords to end of row
-%
-%            i msglen eq endofrow or {exit} if
-%        
-%            i numsscr /nums exch def /nchars exch def
-%
-%            % Determine switches and shifts
-%            {  % common exit
-%                cset (seta) eq cset (setb) eq or nums 4 ge and 
-%                msg i get fn1 ne and {
-%                    nums 2 mod 0 eq
-%                    rem 3 ge and {
-%                        swc cset (seta) eq {enca} {encb} ifelse
-%                        /cset (setc) def
-%                        2 {
-%                            msg i get fn1 eq {
-%                                fn1 encc
-%                                /i i 1 add def
-%                            } {
-%                                msg i 2 getinterval encc
-%                                /i i 2 add def
-%                            } ifelse
-%                        } repeat
-%                        exit
-%                    } if
-%                    nums 2 mod 0 ne
-%                    rem 4 ge and {
-%                        msg i get cset (seta) eq {enca} {encb} ifelse
-%                        /i i 1 add def
-%                        swc cset (seta) eq {enca} {encb} ifelse
-%                        /cset (setc) def
-%                        2 {
-%                            msg i get fn1 eq {
-%                                fn1 encc
-%                                /i i 1 add def
-%                            } {
-%                                msg i 2 getinterval encc
-%                                /i i 2 add def
-%                            } ifelse
-%                        } repeat
-%                        exit
-%                    } if
-%                } if
-%                cset (setb) eq msg i get anotb and 
-%                rem 2 ge and { 
-%                    i msglen 1 sub lt {
-%                        i 1 add bbeforea { 
-%                            sft encb
-%                            msg i get enca
-%                            /i i 1 add def
-%                            exit
-%                        } if
-%                    } if
-%                    swa encb
-%                    /cset (seta) def
-%                    msg i get enca
-%                    /i i 1 add def
-%                    exit
-%                } if
-%                cset (seta) eq msg i get bnota and
-%                rem 2 ge and {
-%                    i msglen 1 sub lt {
-%                        i 1 add abeforeb {
-%                            sft enca
-%                            msg i get encb
-%                            /i i 1 add def
-%                            exit
-%                        } if
-%                    } if
-%                    swb enca
-%                    /cset (setb) def
-%                    msg i get encb
-%                    /i i 1 add def
-%                    exit
-%                } if
-%                cset (setc) eq nums 2 lt and
-%                rem 2 ge and {
-%                    i abeforeb {
-%                        swa encc
-%                        /cset (seta) def
-%                        msg i get enca
-%                        /i i 1 add def
-%                        exit
-%                    } if
-%                    swb encc
-%                    /cset (setb) def
-%                    msg i get encb
-%                    /i i 1 add def
-%                    exit
-%                } if
-%        
-%                % No switches or latches so try to encode
-%                cset (seta) eq seta msg i get known and
-%                rem 1 ge and {
-%                    msg i get enca
-%                    /i i 1 add def
-%                    exit
-%                } if
-%                cset (setb) eq setb msg i get known and
-%                rem 1 ge and {
-%                    msg i get encb
-%                    /i i 1 add def
-%                    exit
-%                } if
-%                cset (setc) eq nums 2 ge and
-%                rem 1 ge and {
-%                    msg i get fn1 eq {
-%                        fn1 encc
-%                        /i i 1 add def
-%                    } {
-%                        msg i 2 getinterval encc
-%                        /i i 2 add def 
-%                    } ifelse
-%                    exit
-%                } if
-%
-%                % Encoding does not fit in the row
-%                /endofrow true def
-%                exit
-%
-%            } loop  % common exit
-%
-%        } loop
-%
-%        % Determine whether this is the final row
-%        r rows eq rows -1 eq or r 1 gt and i msglen eq and rem 2 ge and {
-%            rem 2 sub padrow
-%            /j j 3 add def  % Skip symbol and row checksum character positions
-%            stp enca
-%            /lastrow true def
-%        } {
-%            rem padrow
-%            /j j 1 add def  % Skip row checksum character positions
-%            stp enca
-%            /r r 1 add def
-%        } ifelse
-%
-%    } loop
-%    /cws cws 0 j getinterval def
-
-%    /cws [100 07 06 20 104 33 34 35 12 34 56] def                          % TODO dummy with mask 00
-%    /ratio 3 2 div def /rows -1 def /columns -1 def  % TODO dummy
-%    /mode (notbin) def  % Dummy
-
-    /cws [02 107 112 19 90 96 00 25 109 64 64 64 64 16 111 44 17 95] def   % TODO dummy with mask 03
-    /ratio -1 def /rows 13 def /columns -1 def  % TODO dummy
-    /mode (notbin) def  % Dummy
+        /mode (bin) def
+    } ifelse
 
     % Determine the symbol size
     /nd cws length def
@@ -827,7 +522,7 @@ begin
     nd cws length gt {
         /cws [
             cws aload pop
-            mode (bin) eq {109} {106} ifelse  % TODO verify mode name
+            mode (bin) eq {109} {106} ifelse
             nd cws length sub 1 sub {106} repeat
         ] def
     } if
@@ -1106,5 +801,12 @@ end
 /setpacking where {pop setpacking} if
 
 5 dup scale
-50 50 moveto (Hello) () /dotcode /uk.co.terryburton.bwipp findresource exec
+
+% 50 50 moveto (^100^007^006^020^104^033^034^035^012^034^056) (raw) /dotcode /uk.co.terryburton.bwipp findresource exec
+
+% 50 50 moveto (^002^107^112^019^090^096^000^025^109^064^064^064^064^016^111^044^017^095) (raw rows=13) /dotcode /uk.co.terryburton.bwipp findresource exec
+
+50 50 moveto (FasdfgahsjdklfhaskdjfnasdfASDFVASFVBA) () /dotcode /uk.co.terryburton.bwipp findresource exec
+
+showpage
 
