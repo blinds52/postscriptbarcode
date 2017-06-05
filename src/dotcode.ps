@@ -906,45 +906,31 @@ begin
         /sym exch def
 
         /pen 0 def  /p 0 def
-        rows 2 mod 0 eq {
-            rows 12 lt {
-                /sum 0 def
-                1 1 columns 2 sub {
-                    /x exch def
-                    false
-                    x 1 and 1 rows 1 sub {
-                        sym exch x exch dmv get 1 eq {pop true exit} if
-                    } for
-                    {  % Column not empty
-                        /sum 0 def
-                        /pen pen p add def
-                        /p 0 def
-                    } {
-                        /sum sum 1 def
-                        /p sum 1 eq {rows} {p rows mul} ifelse def
-                    } ifelse
-                } for
-            } if
+        rows 2 mod 1 eq {
+            /xy /x def  /rc /rows def     /cr /columns def
         } {
-            columns 12 lt {
-                /sum 0 def
-                1 1 rows 2 sub {
-                    /y exch def
-                    false
-                    y 1 and 1 columns 1 sub {
-                        sym exch y dmv get 1 eq {pop true exit} if
-                    } for
-                    {  % Row not empty
-                        /sum 0 def
-                        /pen pen p add def
-                        /p 0 def
-                    } {
-                        /sum sum 1 add def
-                        /p sum 1 eq {columns} {p columns mul} ifelse def
-                    } ifelse
-                } for
-            } if
+            /xy /y def  /rc /columns def  /cr /rows def
         } ifelse
+        rc load 12 lt {
+            /sum 0 def
+            1 1 cr load 2 sub {
+                xy exch def
+                false
+                xy load 1 and 2 rc load 1 sub {
+                    xy load xy /x eq {exch} if
+                    sym 3 1 roll
+                    dmv get 1 eq {pop true exit} if
+                } for
+                {  % Column/Row not empty
+                    /sum 0 def
+                    /pen pen p add def
+                    /p 0 def
+                } {
+                    /sum sum 1 add def
+                    /p sum 1 eq {rc load} {p rc load mul} ifelse def
+                } ifelse
+            } for
+        } if
         /pen pen p add def
 
         /worst 9999999 def
